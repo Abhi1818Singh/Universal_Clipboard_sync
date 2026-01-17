@@ -1,0 +1,17 @@
+{
+  "name": "mac-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+  "start": "electron ."
+},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "electron": "^40.0.0",
+    "ws": "^8.19.0"
+  }
+}
