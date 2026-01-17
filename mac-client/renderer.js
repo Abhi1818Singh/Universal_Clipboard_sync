@@ -2,8 +2,10 @@ const { clipboard } = require("electron");
 
 // ---------- UI LOG ----------
 const log = (msg) => {
-  document.getElementById("log").innerText += msg + "\n";
+  const time = new Date().toLocaleTimeString();
+  document.getElementById("log").innerText += `[${time}] ${msg}\n`;
 };
+
 
 // ---------- DEVICE ID ----------
 const deviceId = crypto.randomUUID();
