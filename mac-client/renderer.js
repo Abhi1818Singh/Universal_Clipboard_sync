@@ -1,33 +1,43 @@
 const { clipboard } = require("electron");
 
-// ---------- UI LOG ----------
-const log = (msg) => {
+/* ---------- LOG UI (WHITESPACE SAFE) ---------- */
+const log = (msg, type = "sent") => {
+  const logDiv = document.getElementById("log");
   const time = new Date().toLocaleTimeString();
-  document.getElementById("log").innerText += `[${time}] ${msg}\n`;
+
+  const item = document.createElement("div");
+  item.className = `log-item ${type}`;
+
+  item.innerHTML = `
+    <div style="white-space: pre-wrap; word-break: break-word;">
+${msg}
+    </div>
+    <div class="log-time">${time}</div>
+  `;
+
+  logDiv.prepend(item);
 };
 
-
-// ---------- DEVICE ID ----------
+/* ---------- DEVICE ID ---------- */
 const deviceId = crypto.randomUUID();
 document.getElementById("device").innerText =
   "My Device ID: " + deviceId;
 
-// ---------- WEBSOCKET ----------
+/* ---------- WEBSOCKET ---------- */
 const ws = new WebSocket("ws://localhost:8080");
 
 let peerConnection = null;
 let dataChannel = null;
 
-// Register device with server
 ws.onopen = () => {
   ws.send(JSON.stringify({
     type: "REGISTER_DEVICE",
     deviceId
   }));
-  log("📡 Registered with signaling server");
+  log("📡 Registered with signaling server", "sent");
 };
 
-// Handle signaling messages
+/* ---------- SIGNALING ---------- */
 ws.onmessage = async (event) => {
   const data = JSON.parse(event.data);
 
@@ -36,18 +46,26 @@ ws.onmessage = async (event) => {
   }
 
   if (data.type === "ANSWER") {
-    log("📥 Answer received");
+    log("📥 Answer received", "received");
     await peerConnection.setRemoteDescription(data.answer);
   }
 
   if (data.type === "ICE") {
     await peerConnection.addIceCandidate(data.candidate);
   }
+
+  if (data.type === "PAIR_CODE") {
+    log(`🔑 Pair Code:\n${data.code}`, "sent");
+  }
+
+  if (data.type === "AUTO_CONNECT") {
+    createPeer(data.from);
+  }
 };
 
-// ---------- CREATE PEER (CALLER) ----------
+/* ---------- CREATE PEER ---------- */
 async function createPeer(to) {
-  log("🔗 Creating peer connection to " + to);
+  log(`🔗 Connecting to device:\n${to}`, "sent");
 
   peerConnection = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -56,15 +74,11 @@ async function createPeer(to) {
   dataChannel = peerConnection.createDataChannel("clipboard");
 
   dataChannel.onopen = () => {
-    log("✅ DataChannel OPEN (connected)");
+    log("✅ DataChannel connected", "sent");
   };
 
   dataChannel.onmessage = (e) => {
-    log("📥 Received: " + e.data);
-  };
-
-  peerConnection.onconnectionstatechange = () => {
-    log("Connection state: " + peerConnection.connectionState);
+    log(`📥 Received:\n${e.data}`, "received");
   };
 
   peerConnection.onicecandidate = (e) => {
@@ -86,12 +100,12 @@ async function createPeer(to) {
     offer
   }));
 
-  log("📤 Offer sent");
+  log("📤 Offer sent", "sent");
 }
 
-// ---------- HANDLE OFFER (RECEIVER) ----------
+/* ---------- HANDLE OFFER ---------- */
 async function handleOffer(data) {
-  log("📥 Offer received from " + data.from);
+  log(`📥 Offer received from:\n${data.from}`, "received");
 
   peerConnection = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -101,16 +115,12 @@ async function handleOffer(data) {
     dataChannel = e.channel;
 
     dataChannel.onopen = () => {
-      log("✅ DataChannel OPEN (connected)");
+      log("✅ DataChannel connected", "sent");
     };
 
     dataChannel.onmessage = (ev) => {
-      log("📥 Received: " + ev.data);
+      log(`📥 Received:\n${ev.data}`, "received");
     };
-  };
-
-  peerConnection.onconnectionstatechange = () => {
-    log("Connection state: " + peerConnection.connectionState);
   };
 
   peerConnection.onicecandidate = (e) => {
@@ -133,10 +143,10 @@ async function handleOffer(data) {
     answer
   }));
 
-  log("📤 Answer sent");
+  log("📤 Answer sent", "sent");
 }
 
-// ---------- CLIPBOARD SYNC ----------
+/* ---------- CLIPBOARD SYNC ---------- */
 let lastText = "";
 
 setInterval(() => {
@@ -150,13 +160,25 @@ setInterval(() => {
   ) {
     lastText = text;
     dataChannel.send(text);
-    log("📤 Sent clipboard: " + text);
+    log(`📤 Sent clipboard:\n${text}`, "sent");
   }
 }, 1000);
 
-// ---------- CONNECT BUTTON ----------
+/* ---------- UI ACTIONS ---------- */
 window.connect = () => {
   const peerId = document.getElementById("peerId").value;
   if (!peerId) return;
   createPeer(peerId);
+};
+
+window.generateCode = () => {
+  ws.send(JSON.stringify({ type: "GENERATE_PAIR_CODE" }));
+};
+
+window.joinCode = () => {
+  const code = document.getElementById("pairCode").value;
+  ws.send(JSON.stringify({
+    type: "JOIN_PAIR_CODE",
+    code
+  }));
 };
